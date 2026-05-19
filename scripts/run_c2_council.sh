@@ -3,8 +3,8 @@ set -euo pipefail
 
 # Portable launcher for the C2 council (Codex + Claude + Grok over NATS)
 # Usage examples:
-#   ./run_c2_council.sh "Your topic here" --max-rounds 6
-#   PYTHON_BIN=python3 OWNER=alice SESSION=demo ./run_c2_council.sh "..."
+#   ./scripts/run_c2_council.sh "Your topic here" --max-rounds 6
+#   PYTHON_BIN=python3 OWNER=alice SESSION=demo ./scripts/run_c2_council.sh "..."
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

@@ -39,7 +39,7 @@ Two clean layers:
 | Layer                  | Responsibility                              | Key Files                          |
 |------------------------|---------------------------------------------|------------------------------------|
 | **Protocol**           | Handoff rules, violation detection, `[DONE]` | `protocol.py`, `test_c2_council_runner.py` |
-| **Runtime**            | NATS adapters + council orchestration       | `*_agent.py`, `c2_council_runner.py`, `run_c2_council.sh` |
+| **Runtime**            | NATS adapters + council orchestration       | `*_agent.py`, `c2_council_runner.py`, `scripts/scripts/run_c2_council.sh` |
 
 **Adapters** turn local CLIs (`claude -p`, `codex exec`, `grok -p`) into proper NATS `AgentService` peers that speak the protocol.
 
@@ -86,7 +86,7 @@ pip install nats-py synadia-ai
 
 ```bash
 # Ensure NATS is running and your agent CLIs are authenticated
-./run_c2_council.sh "Design a new feature using the agent protocol" --max-rounds 8
+scripts/scripts/run_c2_council.sh "Design a new feature using the agent protocol" --max-rounds 8
 ```
 
 The script starts the three reference adapters, runs the council, and cleans up on exit.
@@ -95,13 +95,13 @@ The script starts the three reference adapters, runs the council, and cleans up 
 
 ```bash
 # Different owner + session (recommended)
-OWNER=alice SESSION=feature-review ./run_c2_council.sh "..." --max-rounds 6
+OWNER=alice SESSION=feature-review ./scripts/run_c2_council.sh "..." --max-rounds 6
 
 # Use a specific Python interpreter
-PYTHON_BIN=python3 ./run_c2_council.sh "..."
+PYTHON_BIN=python3 ./scripts/run_c2_council.sh "..."
 
 # Custom NATS URL
-NATS_URL=nats://192.168.1.50:4222 ./run_c2_council.sh "..."
+NATS_URL=nats://192.168.1.50:4222 ./scripts/run_c2_council.sh "..."
 ```
 
 ## Protocol Rules (Contract)
@@ -149,17 +149,19 @@ pyproject.toml              # Modern Python packaging metadata
 protocol.py                 # Core protocol (zero dependencies)
 c2_council_runner.py        # Council orchestrator + NATS integration
 *_agent.py                  # Reference NATS adapters
-run_c2_council.sh           # One-command launcher
+scripts/scripts/run_c2_council.sh   # Launcher script
 test_c2_council_runner.py   # Protocol tests
 CONTRIBUTING.md
 docs/
-  PROTOCOL.md               # Draft specification
-  codex-adapter.md          # Historical design notes (Codex integration)
-  project-structure.md      # Project layout explanation
-  archive/                  # Older internal documents
+  PROTOCOL.md               # Core protocol specification (draft)
+  guides/
+    codex-adapter.md        # Design notes for Codex adapter
+    project-structure.md    # Historical project layout
+  research/                 # Early NATS/MCP exploration notes
+  archive/                  # Old internal documents
 ```
 
-See `docs/PROTOCOL.md` for the emerging specification, `docs/codex-adapter.md` and `docs/project-structure.md` for design notes.
+See `docs/PROTOCOL.md` for the specification and `docs/guides/` for implementation notes.
 
 ## Roadmap & Community
 

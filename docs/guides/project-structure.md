@@ -7,14 +7,16 @@
 - `codex_agent.py` — NATS adapter for the Codex CLI.
 - `claude_cli_agent.py` — NATS adapter for the Claude CLI (`claude -p`).
 - `grok_cli_agent.py` — NATS adapter for the Grok CLI.
-- `run_c2_council.sh` — One-command launcher that starts all three adapters + the council runner.
+- `scripts/run_c2_council.sh` — One-command launcher that starts all three adapters + the council runner.
 - `test_c2_council_runner.py` — Unit tests for the protocol layer (runs without NATS).
 
 ## Documentation
 
 - `README.md` — Main project documentation and quick start.
-- `codex-adapter.md` — Design notes for adding Codex as a peer.
-- `docs/` — Additional design documents and protocol discussion.
+- `docs/PROTOCOL.md` — Core specification (work in progress)
+- `docs/guides/` — Implementation and design notes
+- `docs/research/` — Early exploration notes on NATS and MCP integration
+- `docs/archive/` — Historical internal documents
 
 ## Generated / Runtime
 
