@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+.DS_Store
+
+# Generated council run artifacts
+logs/council/*_history.json
+logs/council/*_transcript.md
+
+# Local virtual environments
+.venv/
+venv/
