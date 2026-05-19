@@ -89,7 +89,7 @@ def parse_args() -> argparse.Namespace:
         help="Council topic or opening question",
     )
     parser.add_argument("--url", default=os.getenv("NATS_URL", "nats://localhost:4222"))
-    parser.add_argument("--owner", default=os.environ.get("USER", "terng"))
+    parser.add_argument("--owner", default=os.environ.get("USER", "local"))
     parser.add_argument("--session", default="collab")
     parser.add_argument("--start", default="codex", choices=AGENT_ORDER)
     parser.add_argument("--max-rounds", type=int, default=8)

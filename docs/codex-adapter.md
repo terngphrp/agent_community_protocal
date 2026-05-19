@@ -1,13 +1,12 @@
-# A2A Protocol Extension: Codex Agent
+# Adding Codex as a Peer — Design Notes
 
-**วันที่:** 19 พฤษภาคม 2026  
-**เป้าหมาย:** เพิ่ม Codex เป็น peer ใน Synadia Agent Protocol v0.3 ผ่าน NATS เพื่อให้ Grok, Claude Code, และ Codex คุยกันได้ใน bus เดียวกัน
+**Goal:** Add Codex as a first-class peer in the Synadia Agent Protocol over NATS, enabling Grok, Claude Code, and Codex (and future agents) to collaborate on the same bus.
 
 ---
 
 ## 1. Agent Topology
 
-ระบบควรมอง agent ทุกตัวเป็น peer ที่ใช้ subject pattern เดียวกัน:
+All agents should follow the same subject pattern:
 
 ```text
 agents.prompt.<agent>.<owner>.<session>
@@ -15,19 +14,15 @@ agents.status.<agent>.<owner>.<session>
 agents.hb.<agent>.<owner>.<session>
 ```
 
-ตัวอย่าง agent ใน session เดียวกัน:
+Example agents in one session:
 
-| Agent | Prompt subject | บทบาท |
-| --- | --- | --- |
-| Grok | `agents.prompt.grok.terng.collab` | reasoning, research, Hermes-side tools |
-| Claude Code | `agents.prompt.cc.terng.a2a_local` หรือ `agents.prompt.claude-code.terng.collab` | coding assistant ผ่าน Claude Code / plugin |
-| Codex | `agents.prompt.codex.terng.collab` | coding agent ผ่าน Codex CLI |
+| Agent       | Prompt subject                          | Role                                      |
+|-------------|-----------------------------------------|-------------------------------------------|
+| Grok        | `agents.prompt.grok.alice.collab`       | reasoning, research                       |
+| Claude Code | `agents.prompt.claude-code.alice.collab`| coding assistant via Claude Code CLI      |
+| Codex       | `agents.prompt.codex.alice.collab`      | coding agent via `codex exec`             |
 
-ข้อเสนอคือใช้ชื่อ agent เป็น `codex` เพื่อให้เรียกง่าย:
-
-```bash
-python call_oracle.py codex "ช่วย debug protocol นี้" --session collab
-```
+Recommended agent name is simply `codex` for clarity.
 
 ---
 
@@ -62,37 +57,34 @@ Adapter นี้ทำหน้าที่:
 nats-server -js
 ```
 
-### Install Python dependencies
+### Install dependencies
 
 ```bash
-python -m pip install nats-py synadia-ai-agents
+pip install nats-py synadia-ai
 ```
 
-ถ้าใช้ environment ของ `p2p-agents` ที่ติดตั้งไว้แล้ว ให้ใช้ Python จาก `.venv` ของโปรเจกต์นั้นแทน
-
-### Start Codex Agent
+### Start the Codex Adapter
 
 ```bash
 python codex_agent.py \
-  --owner terng \
+  --owner alice \
   --session-name collab \
-  --workspace /Users/terng/Downloads/work/a2a_local \
+  --workspace /path/to/your/project \
   --sandbox read-only
 ```
 
-subject ที่ได้:
+The agent will register at:
 
 ```text
-agents.prompt.codex.terng.collab
+agents.prompt.codex.alice.collab
 ```
 
-### Call Codex from Grok or Claude
+### Call Codex from another agent (example)
 
 ```bash
-python /Users/terng/Downloads/work/p2p-agents/call_oracle.py \
-  codex \
-  "อ่าน A2A_Current_Debug_Status.md แล้วบอก root cause" \
-  --owner terng \
+python -m your_oracle_tool codex \
+  "Review the current protocol and suggest improvements" \
+  --owner alice \
   --session collab
 ```
 

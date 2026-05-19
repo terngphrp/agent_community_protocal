@@ -1,194 +1,184 @@
-# A2A Local
+# Agent Community Protocol
 
-Local C2 multi-agent council for Codex, Claude, and Grok over NATS using the
-Synadia Agent Protocol.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Status](https://img.shields.io/badge/status-early--development-orange)
 
-This project exposes local CLI tools as A2A peers, then runs a lightweight
-council loop where agents hand off turns with mentions such as `@grok` or
-`@claude-code`.
+A lightweight, deterministic **multi-agent council** protocol for AI coding agents
+(Codex, Claude Code, Grok, and others) running over NATS using the Synadia Agent Protocol.
 
-## What It Does
+This repository contains:
 
-- Registers Codex, Claude, and Grok as local NATS prompt agents.
-- Runs a semi-autonomous C2 council with bounded turns and light memory.
-- Keeps transcript and JSON history files for each council run.
-- Enforces a small protocol for handoffs, termination, and violations.
-- Provides dependency-light unit tests for the protocol layer.
+- The core **protocol rules** for safe agent handoff, termination, and violation handling
+- Reference **CLI adapters** that turn local agent CLIs into NATS peers
+- A **council runner** that orchestrates turn-based collaboration with bounded execution
+
+The goal is to enable reliable, auditable collaboration between heterogeneous AI agents on the same machine or across a local NATS cluster.
+
+## Core Ideas
+
+Agents communicate by sending prompts to each other over NATS using stable subjects:
+
+```
+agents.prompt.<agent>.<owner>.<session>
+```
+
+A **council** is a turn-based conversation where each agent must explicitly hand off to another agent (or terminate with `[DONE]`). The runner enforces strict rules so the collaboration stays on track.
+
+### Key Guarantees
+
+- Only the **final standalone line** `[DONE]` ends a council
+- Self-handoff and mentioning multiple different agents are **protocol violations**
+- Violating turns lose the right to choose the next speaker (deterministic fallback rotation kicks in)
+- All protocol decisions are logged and auditable
 
 ## Architecture
 
-There are two layers:
+Two clean layers:
 
-1. CLI-backed NATS adapters
-2. C2 council runner
+| Layer                  | Responsibility                              | Key Files                          |
+|------------------------|---------------------------------------------|------------------------------------|
+| **Protocol**           | Handoff rules, violation detection, `[DONE]` | `protocol.py`, `test_c2_council_runner.py` |
+| **Runtime**            | NATS adapters + council orchestration       | `*_agent.py`, `c2_council_runner.py`, `run_c2_council.sh` |
 
-Adapters:
+**Adapters** turn local CLIs (`claude -p`, `codex exec`, `grok -p`) into proper NATS `AgentService` peers that speak the protocol.
 
-- `codex_agent.py` registers `agents.prompt.codex.<owner>.<session>`.
-- `claude_cli_agent.py` registers `agents.prompt.claude-code.<owner>.<session>`.
-- `grok_cli_agent.py` registers `agents.prompt.grok.<owner>.<session>`.
+**Runner** handles discovery, prompt construction with rolling history, handoff resolution, and persistent transcripts.
 
-Runner:
+## Installation
 
-- `c2_council_runner.py` discovers agents on NATS.
-- It sends role-aware prompts with recent history.
-- It reads handoff intent from mentions.
-- It writes logs to `logs/council/`.
-- It stops on max rounds or a valid final-line `[DONE]`.
+```bash
+git clone https://github.com/terngphrp/agent_community_protocal.git
+cd agent_community_protocal
+```
 
-Protocol helpers live in `protocol.py` so they can be tested without importing
-NATS or Synadia dependencies.
+### Protocol-only (no NATS needed)
+
+The core protocol can be used immediately:
+
+```bash
+python -m unittest -v test_c2_council_runner.py
+```
+
+### Full Runtime (with NATS adapters)
+
+```bash
+pip install nats-py synadia-ai
+```
+
+> This project uses modern packaging (`pyproject.toml`). A future version may be published on PyPI.
+
+## Dependencies
+
+| Layer              | Dependencies                  | Notes |
+|--------------------|-------------------------------|-------|
+| **Core Protocol**  | None                          | `protocol.py` + tests run anywhere |
+| **Runtime Adapters** | `nats-py`, `synadia-ai`     | Only needed when running agents over NATS |
+| **Development**    | `ruff`, `pytest` (optional)   | See `pyproject.toml` |
 
 ## Requirements
 
-- NATS running at `nats://localhost:4222`
-- Python with `nats` and `synadia_ai`
-- Authenticated local CLIs:
-  - `codex`
-  - `claude`
-  - `grok`
-
-The known working Python runtime is:
-
-```bash
-/Users/terng/Downloads/work/p2p-agents/.venv/bin/python
-```
-
-System Python can run the protocol tests, but not the NATS runner unless the
-required packages are installed.
+- NATS server running (`nats://localhost:4222` by default)
+- Python 3.10+
+- Authenticated local CLIs you want to expose (`claude`, `codex`, `grok`, etc.)
 
 ## Quick Start
 
-Run the full council stack:
+```bash
+# Ensure NATS is running and your agent CLIs are authenticated
+./run_c2_council.sh "Design a new feature using the agent protocol" --max-rounds 8
+```
+
+The script starts the three reference adapters, runs the council, and cleans up on exit.
+
+### Common Environment Overrides
 
 ```bash
-./run_c2_council.sh "AI + Human ควรเป็นอย่างไรในอนาคต" --max-rounds 8
+# Different owner + session (recommended)
+OWNER=alice SESSION=feature-review ./run_c2_council.sh "..." --max-rounds 6
+
+# Use a specific Python interpreter
+PYTHON_BIN=python3 ./run_c2_council.sh "..."
+
+# Custom NATS URL
+NATS_URL=nats://192.168.1.50:4222 ./run_c2_council.sh "..."
 ```
 
-The script starts all three adapters, waits briefly, then launches the runner.
-It also stops the adapters when the runner exits.
+## Protocol Rules (Contract)
 
-Useful environment overrides:
+| Rule                        | Behavior                                                                 |
+|----------------------------|--------------------------------------------------------------------------|
+| **Handoff**                | Must mention exactly one of `@codex`, `@claude-code`, `@grok` (or `@claude`) |
+| **Termination**            | Only a standalone final line `[DONE]` ends the council                   |
+| **Self-handoff**           | Forbidden — treated as protocol violation                                |
+| **Multiple targets**       | Forbidden — violation                                                    |
+| **Violation consequence**  | The violating turn loses steering rights; runner falls back to rotation  |
+| **Adapter errors**         | Treated as violations and cannot terminate the council                   |
+
+## Running Adapters Manually
+
+If you want to start adapters individually (useful for debugging or custom setups):
 
 ```bash
-OWNER=terng SESSION=collab NATS_URL=nats://localhost:4222 ./run_c2_council.sh
-PYTHON_BIN=/path/to/python ./run_c2_council.sh
+python codex_agent.py   --workspace "$PWD" --sandbox read-only
+python claude_cli_agent.py --workspace "$PWD"
+python grok_cli_agent.py --workspace "$PWD"
 ```
 
-## Manual Run
-
-Start adapters in separate terminals:
+Then drive the council yourself:
 
 ```bash
-/Users/terng/Downloads/work/p2p-agents/.venv/bin/python codex_agent.py --owner terng --session-name collab --workspace "$PWD" --sandbox read-only
-/Users/terng/Downloads/work/p2p-agents/.venv/bin/python claude_cli_agent.py --owner terng --session-name collab --workspace "$PWD"
-/Users/terng/Downloads/work/p2p-agents/.venv/bin/python grok_cli_agent.py --owner terng --session-name collab --workspace "$PWD"
+python c2_council_runner.py "Your topic here" --max-rounds 6 --owner local --session demo
 ```
 
-Then run the council:
+## Development
 
 ```bash
-/Users/terng/Downloads/work/p2p-agents/.venv/bin/python c2_council_runner.py \
-  "Review this codebase and propose concrete fixes" \
-  --owner terng \
-  --session collab \
-  --max-rounds 6
+# Run the dependency-free protocol tests
+python -m unittest -v test_c2_council_runner.py
+
+# Quick syntax check across the project
+python -m py_compile protocol.py c2_council_runner.py \
+    codex_agent.py claude_cli_agent.py grok_cli_agent.py
 ```
 
-## Protocol Contract
+## Project Layout
 
-- Valid handoff mentions: `@codex`, `@claude-code`, `@grok`
-- Alias: `@claude` maps to `@claude-code`
-- A council may end only when `[DONE]` is the final standalone line.
-- Adapter error responses are protocol violations.
-- Self-handoff mentions are protocol violations.
-- Multiple unique handoff targets are protocol violations.
-- A violating turn cannot steer the next speaker.
-- Violations are written inline in transcript round headers.
-
-## Logs And Memory
-
-Generated council artifacts are stored under:
-
-```text
-logs/council/
+```
+pyproject.toml              # Modern Python packaging metadata
+protocol.py                 # Core protocol (zero dependencies)
+c2_council_runner.py        # Council orchestrator + NATS integration
+*_agent.py                  # Reference NATS adapters
+run_c2_council.sh           # One-command launcher
+test_c2_council_runner.py   # Protocol tests
+CONTRIBUTING.md
+docs/
+  PROTOCOL.md               # Draft specification
+  codex-adapter.md          # Historical design notes (Codex integration)
+  project-structure.md      # Project layout explanation
+  archive/                  # Older internal documents
 ```
 
-Default runner output uses timestamped files:
+See `docs/PROTOCOL.md` for the emerging specification, `docs/codex-adapter.md` and `docs/project-structure.md` for design notes.
 
-```text
-<run-id>_history.json
-<run-id>_transcript.md
-```
+## Roadmap & Community
 
-Use a stable run id:
+This is the reference implementation of the **Agent Community Protocol**.
 
-```bash
-./run_c2_council.sh "topic" --run-id code-review-001
-```
+Current strengths:
+- Strong, enforceable handoff rules
+- Excellent test coverage on the protocol layer
+- Works today with real Codex, Claude Code, and Grok CLIs
 
-Local project memory lives in:
+Areas where we want contributions:
+- Structured handoff metadata (reduce reliance on LLM formatting)
+- Additional adapters (`aider`, `opencode`, custom agents)
+- Durable memory backends (NATS KV, SQLite, etc.)
+- Formal protocol specification + interoperability test suite
 
-```text
-memory/a2a_local_status.md
-```
+Pull requests, new adapters, and discussions are extremely welcome.
 
-## Tests
+---
 
-Run protocol tests with system Python:
-
-```bash
-python3 -m unittest -v test_c2_council_runner.py
-```
-
-Run with the project runtime:
-
-```bash
-/Users/terng/Downloads/work/p2p-agents/.venv/bin/python -m unittest -v test_c2_council_runner.py
-```
-
-Compile all main files:
-
-```bash
-/Users/terng/Downloads/work/p2p-agents/.venv/bin/python -m py_compile \
-  protocol.py \
-  c2_council_runner.py \
-  codex_agent.py \
-  claude_cli_agent.py \
-  grok_cli_agent.py \
-  test_c2_council_runner.py
-```
-
-## Project Map
-
-- `protocol.py` — dependency-free handoff and protocol helpers.
-- `c2_council_runner.py` — C2 turn loop, NATS discovery, prompt construction, log writing.
-- `codex_agent.py` — Codex CLI adapter.
-- `claude_cli_agent.py` — Claude CLI adapter.
-- `grok_cli_agent.py` — Grok CLI adapter.
-- `run_c2_council.sh` — convenience launcher.
-- `test_c2_council_runner.py` — protocol unit tests.
-- `A2A_Project_Structure.md` — detailed file map.
-- `A2A_C2_Autonomous_Council_Plan.md` — design plan.
-
-## Current Status
-
-The system has passed live local tests with the flow:
-
-```text
-Codex -> Claude -> Grok
-```
-
-Recent hardening added:
-
-- Strict final-line `[DONE]` handling.
-- Structured `HandoffResult`.
-- Self-mention and multiple-target violation detection.
-- Dependency-free protocol tests.
-- Timestamped council logs.
-
-Known next improvements:
-
-- Add a structured handoff footer or metadata channel.
-- Move durable memory to NATS KV or SQLite.
-- Consider process-group cleanup for CLI adapters if a CLI starts detached child processes.
+**Ready to collaborate with multiple AI agents in a safe, auditable way?**  
+Start a council and let them hand off to each other.

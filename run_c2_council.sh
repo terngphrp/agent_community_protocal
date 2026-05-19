@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Portable launcher for the C2 council (Codex + Claude + Grok over NATS)
+# Usage examples:
+#   ./run_c2_council.sh "Your topic here" --max-rounds 6
+#   PYTHON_BIN=python3 OWNER=alice SESSION=demo ./run_c2_council.sh "..."
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_PY="/Users/terng/Downloads/work/p2p-agents/.venv/bin/python"
+
+# Resolve Python interpreter (order: env var > uv > python3 > python)
 if [[ -n "${PYTHON_BIN:-}" ]]; then
   PY="$PYTHON_BIN"
-elif [[ -x "$DEFAULT_PY" ]]; then
-  PY="$DEFAULT_PY"
-else
+elif command -v uv >/dev/null 2>&1 && [[ -f "pyproject.toml" || -f "uv.lock" ]]; then
+  PY="uv run python"
+elif command -v python3 >/dev/null 2>&1; then
   PY="python3"
+else
+  PY="python"
 fi
-OWNER="${OWNER:-terng}"
+
+OWNER="${OWNER:-${USER:-local}}"
 SESSION="${SESSION:-collab}"
 URL="${NATS_URL:-nats://localhost:4222}"
 

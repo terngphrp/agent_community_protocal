@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run local Grok CLI as a NATS A2A agent")
     parser.add_argument("--url", default=os.getenv("NATS_URL", "nats://localhost:4222"))
     parser.add_argument("--agent", default="grok", help="Agent name on the bus")
-    parser.add_argument("--owner", default=os.environ.get("USER", "anon"))
+    parser.add_argument("--owner", default=os.environ.get("USER", "local"))
     parser.add_argument("--session-name", default="collab")
     parser.add_argument("--workspace", default=os.getcwd())
     parser.add_argument("--model", default=None, help="Optional Grok model override")

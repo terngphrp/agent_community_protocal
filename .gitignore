@@ -4,14 +4,22 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 
-# Generated council run artifacts (keep README.md)
-logs/council/*_history.json
-logs/council/*_transcript.md
-logs/council/council_*_history.json
-logs/council/council_*_transcript.md
-logs/council/*council*history*.json
-logs/council/*council*transcript*.md
+# Personal / generated council artifacts (only keep the folder README)
+logs/council/
+!logs/council/README.md
 
-# Local virtual environments
+# Local memory / debug state (never commit)
+memory/
+A2A_Current_Debug_Status*.md
+
+# Local virtual environments and tools
 .venv/
 venv/
+uv.lock
+.pdm-python
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+*~
