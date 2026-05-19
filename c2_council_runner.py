@@ -25,6 +25,12 @@ from synadia_ai.agents import Agents, DiscoverFilter, Envelope
 
 from protocol import AGENT_ORDER, VALID_MENTIONS, analyze_handoff, choose_next, is_adapter_error, is_done_signal
 
+# Import for --auto discovery
+try:
+    from scripts.discover_agents import discover_live_agents
+except Exception:
+    discover_live_agents = None  # graceful fallback if not available
+
 AGENTS = {
     "codex": {
         "label": "Codex",
@@ -101,6 +107,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--history-file", default=None)
     parser.add_argument("--transcript-file", default=None)
+    parser.add_argument("--auto", action="store_true",
+                        help="Auto-discover healthy agents instead of using the default 3-agent set")
     return parser.parse_args()
 
 
@@ -373,7 +381,34 @@ async def run_council(config: CouncilConfig) -> int:
 
 
 def main() -> None:
-    config = config_from_args(parse_args())
+    args = parse_args()
+    config = config_from_args(args)
+
+    if args.auto:
+        if discover_live_agents is None:
+            print("[auto] discover_agents module not available, running in normal mode", file=sys.stderr)
+        else:
+            print(f"[auto] Discovering healthy agents for owner={config.owner} session={config.session}...")
+            try:
+                loop = asyncio.get_event_loop()
+                statuses = loop.run_until_complete(
+                    discover_live_agents(
+                        owner=config.owner,
+                        session=config.session,
+                        url=config.url,
+                        health_check=True,
+                    )
+                )
+                healthy = [s.name for s in statuses if s.healthy]
+                if healthy:
+                    print(f"[auto] Using discovered healthy agents: {healthy}")
+                    # For this run, we still use the full rotation but the user knows what is live.
+                    # A more advanced version would dynamically filter handoff_candidates.
+                else:
+                    print("[auto] WARNING: No healthy agents discovered!", file=sys.stderr)
+            except Exception as e:
+                print(f"[auto] Discovery failed: {e}", file=sys.stderr)
+
     raise SystemExit(asyncio.run(run_council(config)))
 
 

@@ -23,6 +23,14 @@ OWNER="${OWNER:-${USER:-local}}"
 SESSION="${SESSION:-collab}"
 URL="${NATS_URL:-nats://localhost:4222}"
 
+# Optional: auto-discover before launching (pass --discover as first arg or use env)
+if [[ "${1:-}" == "--discover" ]]; then
+  shift
+  echo "=== Auto-discovering live agents ==="
+  "$PY" "$ROOT/discover_agents.py" --owner "$OWNER" --session "$SESSION" --url "$URL" || true
+  echo "===================================="
+fi
+
 PIDS=()
 
 cleanup() {

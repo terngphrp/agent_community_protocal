@@ -39,7 +39,7 @@ Two clean layers:
 | Layer                  | Responsibility                              | Key Files                          |
 |------------------------|---------------------------------------------|------------------------------------|
 | **Protocol**           | Handoff rules, violation detection, `[DONE]` | `protocol.py`, `test_c2_council_runner.py` |
-| **Runtime**            | NATS adapters + council orchestration       | `*_agent.py`, `c2_council_runner.py`, `scripts/scripts/run_c2_council.sh` |
+| **Runtime**            | NATS adapters + council orchestration       | `*_agent.py`, `c2_council_runner.py`, `scripts/run_c2_council.sh` |
 
 **Adapters** turn local CLIs (`claude -p`, `codex exec`, `grok -p`) into proper NATS `AgentService` peers that speak the protocol.
 
@@ -84,9 +84,13 @@ pip install nats-py synadia-ai
 
 ## Quick Start
 
+For a complete walkthrough (including how to run with **only 1 or 2 agents**), see:
+
+→ **[Getting Started Guide](docs/guides/getting-started.md)**
+
 ```bash
 # Ensure NATS is running and your agent CLIs are authenticated
-scripts/scripts/run_c2_council.sh "Design a new feature using the agent protocol" --max-rounds 8
+scripts/run_c2_council.sh "Design a new feature using the agent protocol" --max-rounds 8
 ```
 
 The script starts the three reference adapters, runs the council, and cleans up on exit.
@@ -149,7 +153,7 @@ pyproject.toml              # Modern Python packaging metadata
 protocol.py                 # Core protocol (zero dependencies)
 c2_council_runner.py        # Council orchestrator + NATS integration
 *_agent.py                  # Reference NATS adapters
-scripts/scripts/run_c2_council.sh   # Launcher script
+scripts/run_c2_council.sh   # Launcher script
 test_c2_council_runner.py   # Protocol tests
 CONTRIBUTING.md
 docs/
@@ -161,7 +165,10 @@ docs/
   archive/                  # Old internal documents
 ```
 
-See `docs/PROTOCOL.md` for the specification and `docs/guides/` for implementation notes.
+See:
+- `docs/guides/getting-started.md` (including how to run with 1-2 agents)
+- `scripts/discover_agents.py --help` (auto-detect + health check live agents)
+- `docs/PROTOCOL.md` for the specification
 
 ## Roadmap & Community
 
