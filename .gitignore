@@ -4,9 +4,13 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 
-# Generated council run artifacts
+# Generated council run artifacts (keep README.md)
 logs/council/*_history.json
 logs/council/*_transcript.md
+logs/council/council_*_history.json
+logs/council/council_*_transcript.md
+logs/council/*council*history*.json
+logs/council/*council*transcript*.md
 
 # Local virtual environments
 .venv/
