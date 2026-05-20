@@ -15,6 +15,17 @@ Use `--run-id <name>` for a stable pair of filenames, or pass
 
 ## Recent Activity
 
+- `4986fa3 Make a2a-consult reliable for direct agent calls` pushed to `origin/main`
+- Live NATS checks on 2026-05-20:
+  - Discovered `codex` and `grok` in owner `terng`, session `collab`
+  - Health checks passed for both agents
+  - Direct `a2a-consult` JSON calls passed for `codex` and `grok`
+  - Default-session direct call passed (`collab`)
+  - `--council --max-rounds 1` smoke test passed and ended with `[DONE]`
+- Verification before commit/push:
+  - `.venv/bin/python -m unittest -v test_c2_council_runner.py test_a2a_consult.py`
+  - `.venv/bin/python -m py_compile protocol.py c2_council_runner.py codex_agent.py claude_cli_agent.py grok_cli_agent.py skills/a2a-consult/scripts/a2a_consult.py scripts/discover_agents.py test_a2a_consult.py`
+  - `bash -n scripts/install-a2a-consult.sh scripts/run_c2_council.sh`
 - Major Docker support added (host .venv mount mode for fast testing + host CLI access)
 - `discover_agents.py` with `--ping-pong` protocol test
 - Project structure reorganized (`docs/`, `scripts/`, `memory/`)
