@@ -1,0 +1,2 @@
+nats-py>=2.0
+synadia-ai-agents>=0.4.0   # Official Synadia Python SDK (https://www.npmjs.com/package/@synadia-ai/agents for the JS side)

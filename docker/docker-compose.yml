@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  nats:
+    image: nats:latest
+    ports:
+      - "4223:4222"   # เปลี่ยนจาก 4222 เป็น 4223 เพื่อไม่ให้ชนกับ NATS บนเครื่องจริง
+    command: ["-js"]  # Enable JetStream (required by synadia agents)
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      # Mount the entire project (read-write for development)
+      - ..:/app
+
+      # Mount host home directory so CLI auth/configs are visible (claude, codex, grok auth)
+      - ${HOME}:/host-home
+
+      # Mount common macOS binary locations so we can execute host CLIs
+      - /opt/homebrew/bin:/host-bin
+      - /usr/local/bin:/host-bin-local
+
+    environment:
+      - NATS_URL=nats://nats:4222
+      - PYTHONUNBUFFERED=1
+
+    # Default command runs the council with auto-discovery
+    # Using /app/.venv/bin/python so it uses the packages you installed on the host (including synadia-ai-agents)
+    command: >
+      /app/.venv/bin/python scripts/run_c2_council.sh
+      "Design a new feature using the agent protocol"
+      --max-rounds 6
+
+    depends_on:
+      - nats
+
+    # Interactive mode support
+    stdin_open: true
+    tty: true
+
+    # This allows the container to call host binaries as if they were local
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

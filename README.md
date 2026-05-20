@@ -63,7 +63,7 @@ python -m unittest -v test_c2_council_runner.py
 ### Full Runtime (with NATS adapters)
 
 ```bash
-pip install nats-py synadia-ai
+pip install nats-py synadia-ai-agents
 ```
 
 > This project uses modern packaging (`pyproject.toml`). A future version may be published on PyPI.
@@ -73,7 +73,7 @@ pip install nats-py synadia-ai
 | Layer              | Dependencies                  | Notes |
 |--------------------|-------------------------------|-------|
 | **Core Protocol**  | None                          | `protocol.py` + tests run anywhere |
-| **Runtime Adapters** | `nats-py`, `synadia-ai`     | Only needed when running agents over NATS |
+| **Runtime Adapters** | `nats-py`, `synadia-ai-agents` | Only needed when running agents over NATS |
 | **Development**    | `ruff`, `pytest` (optional)   | See `pyproject.toml` |
 
 ## Requirements
@@ -168,7 +168,9 @@ docs/
 See:
 - `docs/guides/getting-started.md` (including how to run with 1-2 agents)
 - `scripts/discover_agents.py --help` (auto-detect + health check live agents)
+- `docker/README.md` for Docker setup (recommended for reproducibility + calling host CLIs)
 - `docs/PROTOCOL.md` for the specification
+- `a2a-consult` Grok skill (in `~/.grok/skills/a2a-consult/`) — easily delegate tasks to Claude Code / Codex from within any project folder using the A2A protocol
 
 ## Roadmap & Community
 

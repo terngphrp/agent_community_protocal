@@ -156,6 +156,9 @@ You can disable the health check (faster, just discovery):
 
 ```bash
 python scripts/discover_agents.py --owner $USER --session collab --no-health-check
+
+# Run a live ping-pong protocol test between two agents
+python scripts/discover_agents.py --owner $USER --session collab --ping-pong
 ```
 
 ## Tips for Partial Agent Usage
