@@ -26,7 +26,7 @@
 ## Requirements
 
 - NATS server (`nats://localhost:4222` by default)
-- Python 3.10+
+- Python 3.11+
 - `nats` + `synadia_ai` packages (only needed for runtime adapters)
 - Local authenticated CLIs (`claude`, `codex`, `grok`, etc.)
 

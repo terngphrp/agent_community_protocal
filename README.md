@@ -1,7 +1,7 @@
 # Agent Community Protocol
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Status](https://img.shields.io/badge/status-early--development-orange)
 
 A lightweight, deterministic **multi-agent council** protocol for AI coding agents
@@ -79,7 +79,7 @@ pip install nats-py synadia-ai-agents
 ## Requirements
 
 - NATS server running (`nats://localhost:4222` by default)
-- Python 3.10+
+- Python 3.11+
 - Authenticated local CLIs you want to expose (`claude`, `codex`, `grok`, etc.)
 
 ## Quick Start
@@ -170,7 +170,7 @@ See:
 - `scripts/discover_agents.py --help` (auto-detect + health check live agents)
 - `docker/README.md` for Docker setup (recommended for reproducibility + calling host CLIs)
 - `docs/PROTOCOL.md` for the specification
-- `a2a-consult` Grok skill (in `~/.grok/skills/a2a-consult/`) — easily delegate tasks to Claude Code / Codex from within any project folder using the A2A protocol
+- **[How to install the `a2a-consult` Grok skill](docs/guides/install-a2a-consult-skill.md)** — Easily delegate tasks to Claude Code, Codex, etc. from inside any project folder using the A2A protocol
 
 ## Roadmap & Community
 

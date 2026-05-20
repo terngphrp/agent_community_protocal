@@ -9,7 +9,7 @@ This guide will help you get the Agent Community Protocol running — whether yo
   - `claude` (Claude Code)
   - `codex` (OpenAI Codex / compatible)
   - `grok` (xAI Grok CLI)
-- Python 3.10+
+- Python 3.11+
 
 You do **not** need all three agents to use the system.
 
@@ -38,8 +38,8 @@ Example: Only **Claude + Grok**
 1. Start only the agents you have:
 
 ```bash
-python claude_cli_agent.py --owner $USER --session demo --workspace "$PWD" &
-python grok_cli_agent.py   --owner $USER --session demo --workspace "$PWD" &
+python claude_cli_agent.py --owner $USER --session-name demo --workspace "$PWD" &
+python grok_cli_agent.py   --owner $USER --session-name demo --workspace "$PWD" &
 ```
 
 2. Run the council, choosing a valid starting agent:
@@ -63,19 +63,14 @@ The runner still uses a fixed rotation (`codex → claude-code → grok`). If it
 
 ### Single Agent
 
-You can still use the system productively with just one agent:
+For focused single-agent consultation, use `a2a-consult`. This avoids the council runner's fallback rotation:
 
 ```bash
 # Start only the agent you have
-python claude_cli_agent.py --owner $USER --session solo --workspace "$PWD"
+python claude_cli_agent.py --owner $USER --session-name solo --workspace "$PWD"
 
-# Run the runner (it will mostly stay on the same agent)
-python c2_council_runner.py \
-  "Help me design a new feature" \
-  --owner $USER \
-  --session solo \
-  --start claude-code \
-  --max-rounds 10
+# Consult it directly
+a2a-consult claude "Help me design a new feature" --owner $USER --session solo --workspace "$PWD"
 ```
 
 This is useful for:
@@ -89,8 +84,8 @@ For full control, start adapters manually and run the runner with specific optio
 
 ```bash
 # Example: Only Codex + Claude
-python codex_agent.py   --owner alice --session review --workspace "$PWD" --sandbox read-only &
-python claude_cli_agent.py --owner alice --session review --workspace "$PWD" &
+python codex_agent.py   --owner alice --session-name review --workspace "$PWD" --sandbox read-only &
+python claude_cli_agent.py --owner alice --session-name review --workspace "$PWD" &
 
 # Run council
 python c2_council_runner.py \
