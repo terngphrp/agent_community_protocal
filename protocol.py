@@ -80,3 +80,83 @@ def choose_next(
 
     edge_counts[(current, candidate)] = edge_counts.get((current, candidate), 0) + 1
     return candidate
+
+
+# =============================================================================
+# a2a-envelope v0.1 Dual-Mode Support (Migration Layer)
+# =============================================================================
+#
+# This section adds structured envelope support while keeping 100%
+# backward compatibility with all existing mention-based councils.
+#
+# New recommended API: parse_turn()
+# Old APIs (analyze_handoff, is_done_signal, etc.) remain unchanged.
+
+try:
+    from envelope import (
+        Envelope,
+        parse_response as _parse_envelope_or_legacy,
+        format_envelope_block,
+        validate_envelope as _validate_envelope,
+    )
+    _ENVELOPE_AVAILABLE = True
+except Exception:
+    _ENVELOPE_AVAILABLE = False
+    Envelope = None  # type: ignore
+
+
+def parse_turn(
+    text: str,
+    current: str,
+    allow_envelope: bool = True,
+) -> tuple["Envelope | None", HandoffResult, bool, list[str]]:
+    """
+    New primary parser for v0.1+ (recommended, improved after review).
+
+    Returns a 4-tuple for clarity:
+        (envelope, handoff_result, done, violations)
+
+    - `done` is a clean boolean (True if either envelope.done or legacy [DONE] is present and valid).
+    - This removes the need for callers to re-check is_done_signal after parsing.
+    """
+    violations: list[str] = []
+
+    if allow_envelope and _ENVELOPE_AVAILABLE:
+        env, _, env_viols = _parse_envelope_or_legacy(
+            text, current, allow_legacy=True
+        )
+        if env_viols:
+            violations.extend(env_viols)
+
+        if env is not None:
+            requested = env.handoff.to if env.handoff else None
+            viol_str = "; ".join(violations) if violations else None
+
+            # done comes cleanly from the envelope
+            done = bool(env.done) and not viol_str
+            return env, HandoffResult(requested_next=requested, violation=viol_str), done, violations
+
+    # Legacy path
+    legacy = analyze_handoff(text, current)
+    if legacy.violation:
+        violations.append(legacy.violation)
+
+    done = is_done_signal(text) and not legacy.violation
+    if done:
+        return None, HandoffResult(requested_next=None, violation=legacy.violation), True, violations
+
+    return None, legacy, False, violations
+
+
+def format_envelope_for_agent(env: "Envelope") -> str:
+    """Convenience wrapper so runner/adapters can easily embed envelopes."""
+    if not _ENVELOPE_AVAILABLE or Envelope is None:
+        return ""
+    return format_envelope_block(env)
+
+
+def validate_envelope(env: "Envelope", active_agents: list[str] | None = None) -> list[str]:
+    """Wrapper around envelope validation."""
+    if not _ENVELOPE_AVAILABLE or Envelope is None:
+        return ["envelope support not available"]
+    return _validate_envelope(env, active_agents or AGENT_ORDER)

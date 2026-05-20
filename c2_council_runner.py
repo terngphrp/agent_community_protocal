@@ -23,7 +23,17 @@ from pathlib import Path
 import nats
 from synadia_ai.agents import Agents, DiscoverFilter, Envelope
 
-from protocol import AGENT_ORDER, VALID_MENTIONS, analyze_handoff, choose_next, is_adapter_error, is_done_signal
+from protocol import (
+    AGENT_ORDER,
+    VALID_MENTIONS,
+    analyze_handoff,
+    choose_next,
+    is_adapter_error,
+    is_done_signal,
+    parse_turn,          # v0.1 dual-mode parser (envelope first)
+)
+
+from envelope import build_envelope_instructions  # v0.1 prompt helper
 
 # Import for --auto discovery
 try:
@@ -84,6 +94,9 @@ class Turn:
     selected_next: str | None
     protocol_violation: str | None
     created_at: str
+
+    # v0.1 Envelope support (optional, for migration)
+    envelope: dict | None = None   # full a2a-envelope dict when available
 
 
 def parse_args() -> argparse.Namespace:
@@ -191,8 +204,11 @@ Turn rules:
 - This is round {round_no}. Respond as {AGENTS[agent_name]["label"]}.
 - Advance the discussion; do not summarize unless it changes the decision.
 - Keep the answer concise enough for another agent to continue.
-- If another agent should speak next, include exactly one mention from: {VALID_MENTIONS}.
-- If the council has reached a clear useful conclusion, put [DONE] on its own final line.
+
+Preferred (v0.1+): Use structured a2a-envelope at the very end of your response.
+{build_envelope_instructions(agent_name, AGENT_ORDER)}
+
+Legacy (still supported during migration): If you prefer the old style, include exactly one mention from: {VALID_MENTIONS} and put [DONE] on its own final line when finished.
 - Do not mention yourself as the next speaker unless you are explicitly correcting your own previous answer.
 """
 
@@ -311,23 +327,61 @@ async def run_turn(
     )
     print(response, flush=True)
 
+    # === v0.1 Envelope-aware parsing (dual mode) ===
     protocol_violation = None
+    envelope_dict = None
+
     if is_adapter_error(response):
         protocol_violation = "adapter error response"
         requested_next = None
     else:
-        handoff = analyze_handoff(response, current)
+        env, handoff, done_from_parser, violations = parse_turn(response, current, allow_envelope=True)
         requested_next = handoff.requested_next
         protocol_violation = handoff.violation
 
-    done = is_done_signal(response)
+        if violations:
+            extra = " | ".join(violations)
+            protocol_violation = f"{protocol_violation} | {extra}" if protocol_violation else extra
+
+        if env is not None:
+            # Store structured envelope for future use / audit
+            envelope_dict = {
+                "version": env.version,
+                "turn_id": env.turn_id,
+                "from": env.from_agent,
+                "handoff": {"to": env.handoff.to, "reason": env.handoff.reason} if env.handoff else None,
+                "done": env.done,
+                "correction_attempt": env.correction_attempt,
+                "violations": env.violations or [],
+            }
+
+    # === v0.1 Envelope-aware termination (use done flag from parse_turn) ===
+    done = done_from_parser
+
+    # Fallback: still respect legacy [DONE] if parser didn't catch it (very rare)
+    if not done and is_done_signal(response):
+        done = True
+
     if done and protocol_violation:
         done = False
         protocol_violation += "; done signal ignored because turn violated protocol"
+
     if done:
         requested_next = None
     elif protocol_violation:
-        requested_next = None
+        # Self-correction support (v0.1 basic)
+        attempt = 0
+        if envelope_dict:
+            attempt = envelope_dict.get("correction_attempt", 0)
+
+        if attempt >= 1:
+            # ใช้โอกาสแก้หมดแล้ว → forfeit จริง
+            requested_next = None
+        else:
+            # ยังมีโอกาสแก้ (correction_attempt == 0) → ยังไม่ตัดสิทธิ์การเลือก next
+            # บันทึกไว้ใน violation เพื่อให้ transcript ชัดเจน
+            protocol_violation = f"{protocol_violation} (correction_attempt=0 — 1 retry allowed)"
+            # ปล่อยให้ requested_next ยังคงอยู่ (ถ้ามี) หรือให้ agent เลือกใหม่ในรอบนี้
     elif requested_next is None:
         protocol_violation = "missing handoff mention"
 
@@ -349,6 +403,7 @@ async def run_turn(
         selected_next=selected_next,
         protocol_violation=protocol_violation,
         created_at=utc_now(),
+        envelope=envelope_dict,   # v0.1
     )
 
 
