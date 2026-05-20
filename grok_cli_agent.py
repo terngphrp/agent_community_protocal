@@ -52,6 +52,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout", type=float, default=600.0)
     parser.add_argument("--system", default=DEFAULT_SYSTEM_PROMPT)
     parser.add_argument("--grok-bin", default=os.getenv("GROK_BIN", "grok"))
+    parser.add_argument(
+        "--resume",
+        default=None,
+        metavar="SESSION_ID",
+        help="Resume an existing Grok session.",
+    )
     parser.add_argument("--extra-arg", action="append", default=[], help="Extra arg for grok")
     return parser.parse_args()
 
@@ -65,28 +71,38 @@ def build_prompt(system_prompt: str, remote_prompt: str) -> str:
     )
 
 
+def build_grok_command(args: argparse.Namespace, prompt: str, workspace: Path) -> list[str]:
+    cmd = [args.grok_bin]
+    if args.resume:
+        cmd.extend(["--resume", args.resume])
+
+    cmd.extend(
+        [
+            "-p",
+            prompt,
+            "--cwd",
+            str(workspace),
+            "--permission-mode",
+            args.permission_mode,
+            "--sandbox",
+            args.sandbox,
+            "--output-format",
+            "plain",
+        ]
+    )
+    if args.model:
+        cmd.extend(["--model", args.model])
+    if args.extra_arg:
+        cmd.extend(args.extra_arg)
+    return cmd
+
+
 async def run_grok(args: argparse.Namespace, prompt: str) -> str:
     workspace = Path(args.workspace).expanduser().resolve()
     if not workspace.exists():
         raise RuntimeError(f"workspace does not exist: {workspace}")
 
-    cmd = [
-        args.grok_bin,
-        "-p",
-        prompt,
-        "--cwd",
-        str(workspace),
-        "--permission-mode",
-        args.permission_mode,
-        "--sandbox",
-        args.sandbox,
-        "--output-format",
-        "plain",
-    ]
-    if args.model:
-        cmd.extend(["--model", args.model])
-    if args.extra_arg:
-        cmd.extend(args.extra_arg)
+    cmd = build_grok_command(args, prompt, workspace)
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,

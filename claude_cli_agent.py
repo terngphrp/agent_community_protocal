@@ -50,6 +50,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--system", default=DEFAULT_SYSTEM_PROMPT)
     parser.add_argument("--claude-bin", default=os.getenv("CLAUDE_BIN", "claude"))
     parser.add_argument("--tools", default="", help='Passed to claude --tools. Empty disables tools.')
+    parser.add_argument(
+        "--resume",
+        default=None,
+        metavar="SESSION_ID",
+        help="Resume an existing Claude Code session. Disables --no-session-persistence.",
+    )
     parser.add_argument("--extra-arg", action="append", default=[], help="Extra arg for claude")
     return parser.parse_args()
 
@@ -63,27 +69,38 @@ def build_prompt(system_prompt: str, remote_prompt: str) -> str:
     )
 
 
+def build_claude_command(args: argparse.Namespace, prompt: str) -> list[str]:
+    cmd = [args.claude_bin]
+    if args.resume:
+        cmd.extend(["--resume", args.resume])
+
+    cmd.extend(
+        [
+            "-p",
+            prompt,
+            "--permission-mode",
+            args.permission_mode,
+            "--output-format",
+            "text",
+            "--tools",
+            args.tools,
+        ]
+    )
+    if not args.resume:
+        cmd.append("--no-session-persistence")
+    if args.model:
+        cmd.extend(["--model", args.model])
+    if args.extra_arg:
+        cmd.extend(args.extra_arg)
+    return cmd
+
+
 async def run_claude(args: argparse.Namespace, prompt: str) -> str:
     workspace = Path(args.workspace).expanduser().resolve()
     if not workspace.exists():
         raise RuntimeError(f"workspace does not exist: {workspace}")
 
-    cmd = [
-        args.claude_bin,
-        "-p",
-        prompt,
-        "--permission-mode",
-        args.permission_mode,
-        "--output-format",
-        "text",
-        "--no-session-persistence",
-        "--tools",
-        args.tools,
-    ]
-    if args.model:
-        cmd.extend(["--model", args.model])
-    if args.extra_arg:
-        cmd.extend(args.extra_arg)
+    cmd = build_claude_command(args, prompt)
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,

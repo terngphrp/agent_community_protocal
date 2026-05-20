@@ -35,6 +35,27 @@ class A2AConsultTests(unittest.TestCase):
         self.assertEqual(args.nats_url, "nats://example:4222")
         self.assertEqual(args.max_rounds, 1)
         self.assertFalse(args.council)
+        self.assertIsNone(args.target_session)
+        self.assertIsNone(args.from_agent)
+
+    def test_parse_args_accepts_cross_session_relay(self) -> None:
+        argv = [
+            "a2a-consult",
+            "claude",
+            "send update",
+            "--target-session",
+            "claude-main",
+            "--from-agent",
+            "grok",
+            "--from-session",
+            "grok-sidecar",
+        ]
+        with patch.object(sys, "argv", argv):
+            args = self.mod.parse_args()
+
+        self.assertEqual(args.target_session, "claude-main")
+        self.assertEqual(args.from_agent, "grok")
+        self.assertEqual(args.from_session, "grok-sidecar")
 
     def test_remote_prompt_contains_workspace_and_task(self) -> None:
         prompt = self.mod.build_remote_prompt("fix the tests", Path("/tmp/project"))
@@ -49,6 +70,8 @@ class A2AConsultTests(unittest.TestCase):
             nats_url="nats://nats:4222",
             owner="alice",
             session="feature",
+            target_owner=None,
+            target_session=None,
             max_rounds=3,
             timeout=42.0,
             discover_wait=1.5,
@@ -68,6 +91,27 @@ class A2AConsultTests(unittest.TestCase):
         self.assertIn("42.0", cmd)
         self.assertNotIn("--workspace", cmd)
         self.assertIn("/work/repo", cmd[2])
+
+    def test_run_council_uses_target_session_when_present(self) -> None:
+        args = self.mod.argparse.Namespace(
+            prompt="review this",
+            nats_url="nats://nats:4222",
+            owner="alice",
+            session="feature",
+            target_owner="bob",
+            target_session="dest",
+            max_rounds=3,
+            timeout=42.0,
+            discover_wait=1.5,
+        )
+        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout="ok", stderr="")
+
+        with patch.object(self.mod.subprocess, "run", return_value=completed) as run:
+            self.mod.run_council(args, "codex", Path("/work/repo"))
+
+        cmd = run.call_args.args[0]
+        self.assertEqual(cmd[cmd.index("--owner") + 1], "bob")
+        self.assertEqual(cmd[cmd.index("--session") + 1], "dest")
 
 
 if __name__ == "__main__":

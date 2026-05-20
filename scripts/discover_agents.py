@@ -4,6 +4,7 @@ Discover live agents on the NATS bus for the Agent Community Protocol.
 
 Usage examples:
     python scripts/discover_agents.py --owner terng --session collab
+    python scripts/discover_agents.py --owner terng --all-sessions
     python scripts/discover_agents.py --owner $USER --session demo --health-check
     python scripts/discover_agents.py --owner alice --session review --no-health-check
 
@@ -42,7 +43,7 @@ class AgentStatus:
 
 async def discover_live_agents(
     owner: str,
-    session: str,
+    session: str | None,
     url: str = "nats://localhost:4222",
     health_check: bool = True,
     health_prompt: str = "Respond with exactly: AGENT-OK",
@@ -57,16 +58,31 @@ async def discover_live_agents(
     bus = Agents(nc=nc)
 
     try:
-        discovered = await bus.discover(
-            filter=DiscoverFilter(owner=owner, session_name=session),
-            max_wait=discover_wait,
+        discover_filter = (
+            DiscoverFilter(owner=owner, session_name=session)
+            if session
+            else DiscoverFilter(owner=owner)
         )
+
+        discovered = await bus.discover(filter=discover_filter, max_wait=discover_wait)
 
         results: list[AgentStatus] = []
 
         for agent_info in discovered:
             agent_name = agent_info.agent
-            status = AgentStatus(name=agent_name, owner=owner, session=session, discovered=True)
+            discovered_owner = getattr(agent_info, "owner", owner)
+            discovered_session = (
+                getattr(agent_info, "session_name", None)
+                or getattr(agent_info, "session", None)
+                or session
+                or "-"
+            )
+            status = AgentStatus(
+                name=agent_name,
+                owner=discovered_owner,
+                session=discovered_session,
+                discovered=True,
+            )
 
             if health_check:
                 start = time.time()
@@ -103,31 +119,37 @@ async def discover_live_agents(
 
 
 
-def print_status_table(statuses: list[AgentStatus]):
+def print_status_table(statuses: list[AgentStatus], *, all_sessions: bool = False):
     if not statuses:
         print("No agents discovered.")
         return
 
-    print(f"\nDiscovered agents (owner={statuses[0].owner}, session={statuses[0].session})\n")
-    print(f"{'Agent':<18} {'Status':<12} {'Time':>8} {'Response / Error'}")
-    print("-" * 80)
+    if all_sessions:
+        print(f"\nDiscovered agents (owner={statuses[0].owner}, all sessions)\n")
+        print(f"{'Session':<22} {'Agent':<18} {'Status':<12} {'Time':>8} {'Response / Error'}")
+        print("-" * 104)
+    else:
+        print(f"\nDiscovered agents (owner={statuses[0].owner}, session={statuses[0].session})\n")
+        print(f"{'Agent':<18} {'Status':<12} {'Time':>8} {'Response / Error'}")
+        print("-" * 80)
 
     for s in statuses:
+        prefix = f"{s.session:<22} " if all_sessions else ""
         if not s.discovered:
-            print(f"{s.name:<18} {'NOT FOUND':<12} {'-':>8} {'-'}")
+            print(f"{prefix}{s.name:<18} {'NOT FOUND':<12} {'-':>8} {'-'}")
             continue
 
         if s.healthy is None:
             # Discovery only, no health check
-            print(f"{s.name:<18} {'DISCOVERED':<12} {'-':>8} {'-'}")
+            print(f"{prefix}{s.name:<18} {'DISCOVERED':<12} {'-':>8} {'-'}")
         elif s.healthy:
             time_str = f"{s.response_time_ms}ms" if s.response_time_ms else "-"
             resp = s.sample_response or ""
-            print(f"{s.name:<18} {'✅ HEALTHY':<12} {time_str:>8} {resp}")
+            print(f"{prefix}{s.name:<18} {'✅ HEALTHY':<12} {time_str:>8} {resp}")
         else:
             time_str = f"{s.response_time_ms}ms" if s.response_time_ms else "-"
             err = s.error or "No response"
-            print(f"{s.name:<18} {'❌ UNHEALTHY':<12} {time_str:>8} {err}")
+            print(f"{prefix}{s.name:<18} {'❌ UNHEALTHY':<12} {time_str:>8} {err}")
 
     print()
 
@@ -235,6 +257,8 @@ async def main():
     parser = argparse.ArgumentParser(description="Discover live A2A agents on NATS")
     parser.add_argument("--owner", default=os.environ.get("OWNER", os.environ.get("USER", "local")))
     parser.add_argument("--session", default=os.environ.get("SESSION", "collab"))
+    parser.add_argument("--all-sessions", action="store_true",
+                        help="Discover every session for the owner instead of one session")
     parser.add_argument("--url", default=os.environ.get("NATS_URL", "nats://localhost:4222"))
     parser.add_argument("--health-check", action="store_true", default=True,
                         help="Send a test prompt to each agent (default: on)")
@@ -255,7 +279,7 @@ async def main():
 
     statuses = await discover_live_agents(
         owner=args.owner,
-        session=args.session,
+        session=None if args.all_sessions else args.session,
         url=args.url,
         health_check=args.health_check,
         timeout=args.timeout,
@@ -273,11 +297,18 @@ async def main():
         await run_ping_pong_test(statuses, args.url, args.timeout)
         return
 
-    print(f"Scanning NATS at {args.url} for owner={args.owner} session={args.session}...")
-    print_status_table(statuses)
+    if args.all_sessions:
+        print(f"Scanning NATS at {args.url} for owner={args.owner} across all sessions...")
+    else:
+        print(f"Scanning NATS at {args.url} for owner={args.owner} session={args.session}...")
+    print_status_table(statuses, all_sessions=args.all_sessions)
 
     healthy_count = sum(1 for s in statuses if s.healthy is True)
-    print(f"Found {len(statuses)} agent(s), {healthy_count} healthy.")
+    session_count = len({s.session for s in statuses})
+    if args.all_sessions:
+        print(f"Found {len(statuses)} agent(s), {session_count} session(s), {healthy_count} healthy.")
+    else:
+        print(f"Found {len(statuses)} agent(s), {healthy_count} healthy.")
 
 
 if __name__ == "__main__":
