@@ -18,8 +18,10 @@ import argparse
 import asyncio
 import json
 import os
+import subprocess
 import time
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Optional
 
 import nats
@@ -39,6 +41,105 @@ class AgentStatus:
     response_time_ms: Optional[int] = None
     sample_response: Optional[str] = None
     error: Optional[str] = None
+    source: str = "a2a"
+    pid: Optional[int] = None
+    workspace: Optional[str] = None
+
+
+def _session_from_workspace(workspace: str | None, pid: int) -> str:
+    if not workspace:
+        return f"grok-{pid}"
+    name = Path(workspace).name.strip()
+    return name or f"grok-{pid}"
+
+
+def _process_cwd(pid: int) -> str | None:
+    try:
+        result = subprocess.run(
+            ["lsof", "-a", "-p", str(pid), "-d", "cwd", "-Fn"],
+            capture_output=True,
+            text=True,
+            timeout=2.0,
+            check=False,
+        )
+    except Exception:
+        return None
+
+    if result.returncode != 0:
+        return None
+
+    for line in result.stdout.splitlines():
+        if line.startswith("n"):
+            return line[1:]
+    return None
+
+
+def _looks_like_grok_process(command: str, args: str) -> bool:
+    command_name = Path(command).name.lower()
+    if command_name.startswith("grok"):
+        return True
+
+    first_arg = args.split(maxsplit=1)[0] if args.strip() else ""
+    return Path(first_arg).name.lower().startswith("grok")
+
+
+def discover_local_grok_cli(owner: str, session: str | None = None) -> list[AgentStatus]:
+    """Discover normal local Grok CLI processes by inspecting the process table.
+
+    These entries are not NATS AgentService peers. They are useful for showing
+    humans and scripts that a Grok CLI session exists, and for choosing the
+    matching workspace/session name when starting a bridge adapter.
+    """
+    try:
+        result = subprocess.run(
+            ["ps", "-eo", "pid=,comm=,args="],
+            capture_output=True,
+            text=True,
+            timeout=3.0,
+            check=False,
+        )
+    except Exception:
+        return []
+
+    if result.returncode != 0:
+        return []
+
+    statuses: list[AgentStatus] = []
+    seen_pids: set[int] = set()
+    for line in result.stdout.splitlines():
+        parts = line.strip().split(maxsplit=2)
+        if len(parts) < 2:
+            continue
+
+        pid_text, command = parts[0], parts[1]
+        args = parts[2] if len(parts) > 2 else command
+        try:
+            pid = int(pid_text)
+        except ValueError:
+            continue
+
+        if pid in seen_pids or not _looks_like_grok_process(command, args):
+            continue
+
+        workspace = _process_cwd(pid)
+        discovered_session = _session_from_workspace(workspace, pid)
+        if session and discovered_session != session:
+            continue
+
+        seen_pids.add(pid)
+        statuses.append(
+            AgentStatus(
+                name="grok",
+                owner=owner,
+                session=discovered_session,
+                discovered=True,
+                source="local-cli",
+                pid=pid,
+                workspace=workspace,
+            )
+        )
+
+    return statuses
 
 
 async def discover_live_agents(
@@ -49,6 +150,7 @@ async def discover_live_agents(
     health_prompt: str = "Respond with exactly: AGENT-OK",
     timeout: float = 25.0,
     discover_wait: float = 3.5,
+    include_local_cli: bool = False,
 ) -> list[AgentStatus]:
     """Programmatic API: Discover agents and optionally health-check them.
 
@@ -110,6 +212,14 @@ async def discover_live_agents(
 
             results.append(status)
 
+        if include_local_cli:
+            existing = {(s.name, s.owner, s.session) for s in results}
+            for local_status in discover_local_grok_cli(owner, session):
+                key = (local_status.name, local_status.owner, local_status.session)
+                if key not in existing:
+                    results.append(local_status)
+                    existing.add(key)
+
         return results
     finally:
         await bus.close()
@@ -139,7 +249,10 @@ def print_status_table(statuses: list[AgentStatus], *, all_sessions: bool = Fals
             print(f"{prefix}{s.name:<18} {'NOT FOUND':<12} {'-':>8} {'-'}")
             continue
 
-        if s.healthy is None:
+        if s.source == "local-cli":
+            detail = s.workspace or f"pid={s.pid}"
+            print(f"{prefix}{s.name:<18} {'LOCAL CLI':<12} {'-':>8} {detail}")
+        elif s.healthy is None:
             # Discovery only, no health check
             print(f"{prefix}{s.name:<18} {'DISCOVERED':<12} {'-':>8} {'-'}")
         elif s.healthy:
@@ -274,6 +387,8 @@ async def main():
                         help="How long to wait for discovery (seconds)")
     parser.add_argument("--ping-pong", action="store_true",
                         help="Run a simple ping-pong protocol test between two healthy agents")
+    parser.add_argument("--include-local-cli", action="store_true",
+                        help="Also list normal local Grok CLI processes as source=local-cli")
 
     args = parser.parse_args()
 
@@ -284,6 +399,7 @@ async def main():
         health_check=args.health_check,
         timeout=args.timeout,
         discover_wait=args.discover_wait,
+        include_local_cli=args.include_local_cli,
     )
 
     if args.only_healthy:

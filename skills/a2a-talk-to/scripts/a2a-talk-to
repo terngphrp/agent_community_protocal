@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Convenience wrapper for a2a-talk-to
+# Allows calling: ./skills/a2a-talk-to/scripts/a2a-talk-to ...
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+A2A_LOCAL_ROOT="${A2A_LOCAL_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
+cd "$A2A_LOCAL_ROOT"
+exec uv run python "$SCRIPT_DIR/a2a_talk_to.py" "$@"
